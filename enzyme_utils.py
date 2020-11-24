@@ -9,6 +9,7 @@ from scipy.stats import norm
 # import Generative_Model as GM
 import logging 
 import os 
+from scipy import stats 
 
 
 def loadMin(df, minLength, frameToSecond, pixelToMeter, file_number):
@@ -1207,6 +1208,109 @@ def run_simpleBD_with_noise(dir_, param, min_length, ind, save=False):
     np.savetxt(parent + '/_postsamp'+ str(ind) +'.tsv', np.vstack((trace['D'], trace['me'])).T, delimiter="\t") 
 
     return 
+
+def removeOutLiar(sx, sy, st):
+    """detect and remove outliers in the data"""
+
+    zscore_x, zscore_y = np.abs(stats.zscore(sx)), np.abs(stats.zscore(sy))
+    outlier_x = np.where(zscore_x >= 2.5)[0]
+    outlier_y = np.where(zscore_y >= 2.5)[0]
+    all_outlier = list((set(outlier_x).union(set(outlier_y))))
+    sx, sy = np.delete(sx, all_outlier), np.delete(sy, all_outlier)
+    st = np.delete(st, all_outlier)
+    return sx, sy, st 
+
+def run_HPWinference(dir_, param, file_stats, save=False): 
+    root = 'enzymeBayes_results' 
+    createFolder(root) 
+
+    # plot_priors(param, parent, save=save) 
+
+    x, y, t, track_info, lookup, track_id = file_stats 
+
+    # correcting for outlier and center the tracks
+    new_x, new_y, new_t = [], [], []
+    new_dx, new_dy, new_dt = [], [], []
+    new_lookup = []
+
+    for i in range(len(track_info)): 
+        parent = root + '/results_track_info_idx_' + str(i) 
+        createFolder(parent)   
+
+        sx, sy, st = loadSelectTraj(x, y, t, track_info, i, False)
+        sx, sy, st = removeOutLiar(sx, sy, st)
+        new_x.append((sx-sx.mean())[:-1])
+        new_y.append((sy-sy.mean())[:-1])
+        new_t.append((st-st.mean())[:-1])
+        
+        new_dx.append(sx[1:]-sx[:-1])
+        new_dy.append(sy[1:]-sy[:-1])
+        new_dt.append(st[1:]-st[:-1])
+        
+        new_lookup.append(i*np.ones((len(sx[1:]-sx[:-1]), ))) 
+
+
+    # assemble the tracks into a long array for pymc3
+    new_x = np.concatenate(new_x)
+    new_y = np.concatenate(new_y)
+    new_t = np.concatenate(new_t)
+
+    new_dx = np.concatenate(new_dx)
+    new_dy = np.concatenate(new_dy)
+    new_dt = np.concatenate(new_dt)
+
+    new_lookup = (np.concatenate(new_lookup)).astype('int') 
+
+    model = pm.Model()
+
+    with model: 
+        
+        D = pm.Lognormal('D', param['mu_D'], param['sigma_D'], shape=len(track_info))
+        k = pm.Lognormal('lam', param['mu_lambda'], shape=len(track_info))
+        D_, k_ = D[new_lookup], k[new_lookup]
+
+        
+        mean_x = (-(new_x)) * (1-tt.exp(-k_*new_dt))
+        mean_y = (-(new_y)) * (1-tt.exp(-k_*new_dt))
+        std = tt.sqrt(D_*(1-tt.exp(-2*k_*new_dt))/k_)
+
+        like_x = pm.Normal('like_x', mu=mean_x, sd=std, observed=new_dx)
+        like_y = pm.Normal('like_y', mu=mean_y, sd=std, observed=new_dy)
+        
+    # x, y, t, track_info, lookup, track_id = [file_stats] 
+
+    # sx, sy, st = loadSelectTraj(x, y, t, track_info, ind, False) 
+    # sx, sy, st = removeOutLiar(sx, sy, st) 
+    
+    # sdx = np.diff(sx); sdy = np.diff(sy); sdt = np.diff(st); 
+
+    # corr_y = (sy-sy.mean())
+    # corr_x = (sx-sx.mean())
+
+    # with pm.Model() as model: 
+    #     D = pm.Lognormal('D', param['mu_D'], param['sigma_D'])
+    #     lamda = pm.Lognormal('lam', param['mu_lambda'], param['sigma_lambda']) 
+        
+    #     mean_x = (0. - corr_x[:-1])*(1-tt.exp(-lamda*sdt))
+    #     mean_y = (0. - corr_y[:-1])*(1-tt.exp(-lamda*sdt))
+    #     std = tt.sqrt(D*(1-tt.exp(-2*lamda*sdt))/lamda)
+        
+    #     like_x = pm.Normal('like_x', mu=mean_x, sd=std, observed=sdx)
+    #     like_y = pm.Normal('like_y', mu=mean_y, sd=std, observed=sdy) 
+
+
+    with model:
+        trace = pm.sample(5000, tune=5000, chains=3, cores=1, target_accept=0.99) 
+
+    pm.traceplot(trace)  
+    if save: plt.savefig(parent + '/_trace_' + str(ind) + '.png', bbox_inches='tight') 
+
+    # plot_prior_posterior_validation(param, trace, None, parent, save=save)  
+
+    np.savetxt(parent + '/_postsamp'+ str(ind) +'.tsv', np.vstack((trace['D'], trace['lam'])), delimiter="\t") 
+
+    return 
+
 
 
 def generate_data(dict_): 
