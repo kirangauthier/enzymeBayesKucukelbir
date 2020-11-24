@@ -7,7 +7,8 @@ from pathlib import Path
 from sklearn.neighbors import NearestNeighbors
 from scipy.stats import norm
 # import Generative_Model as GM
-import logging
+import logging 
+import os 
 
 
 def loadMin(df, minLength, frameToSecond, pixelToMeter, file_number):
@@ -860,10 +861,10 @@ def generate_params(Jiayu_params=False):
         param = {} 
         param['mu_D'] = -3. 
         param['sigma_D'] = 2. 
-        param['mu_lambda'] = -10. 
-        param['sigma_lambda'] = 5. 
+        param['mu_lambda'] = -2. 
+        param['sigma_lambda'] = 2. 
         param['mu_Me'] = -2. 
-        param['sigma_Me'] = 0.5 
+        param['sigma_Me'] = 2. 
     else: 
         param = {} 
         param['mu_D'] = -3. 
@@ -871,11 +872,11 @@ def generate_params(Jiayu_params=False):
         param['mu_lambda'] = -2. # Jiayu likes stronger priors on lambda  
         param['sigma_lambda'] = 1. ## 
         param['mu_Me'] = -2. 
-        param['sigma_Me'] = 0.5 
+        param['sigma_Me'] = 2.  
 
     return param 
 
-def plot_priors(param): 
+def plot_priors(param, parent=None, save=False): 
     priors = [('D', pm.Lognormal.dist(mu=param['mu_D'], sd=param['sigma_D'])), 
          ('lambda', pm.Lognormal.dist(mu=param['mu_lambda'], sd=param['sigma_lambda'])), 
          ('Me', pm.Lognormal.dist(mu=param['mu_Me'], sd=param['sigma_Me']))] 
@@ -896,7 +897,9 @@ def plot_priors(param):
         plt.axvline(np.exp(stats[i][0]), c='k', alpha=0.4, label='geometric mean') 
         plt.axvline(np.exp(stats[i][0] + stats[i][1]), c='r', alpha=0.4, label='geometric std dev') 
         plt.axvline(np.exp(stats[i][0] - stats[i][1]), c='r', alpha=0.4)
-        plt.legend(fontsize=12)
+        plt.legend(fontsize=12) 
+        if save: plt.savefig(parent + '/_priors'+str(i)+'.png')
+    plt.tight_layout()  
     plt.show() 
     pass 
 
@@ -967,7 +970,245 @@ def plot_prior_posterior(param, trace, true_vals=None):
     # except: 
     #     pass   
 
+
+def plot_prior_posterior_comparison(param, trace1, trace2, true_vals=None): 
+    # plt.figure()
+    # sns.distplot(trace['D'], bins=np.logspace(-4, 2, 101), 
+    #              kde=False, label='posterior') 
+    # plt.hist(trace['D'], density=False, bins=np.logspace(-4, 2, 101), alpha=0.4) 
+    # plt.semilogx() 
+    # plt.show() 
+
+    plt.figure(1, figsize=(8,8)) 
     
+    bins_D = np.logspace(param['mu_D'] - 3.*param['sigma_D'], param['mu_D'] + 3.*param['sigma_D'], 51)  
+
+
+    # plt.subplot(211)
+    plt.subplot(311) 
+
+    sns.distplot(pm.Lognormal.dist(param['mu_D'], param['sigma_D']).random(size=len(trace1['D'])), 
+                 bins=bins_D, kde=False, label='prior') 
+    sns.distplot(trace1['D'], bins=np.logspace(np.log10(min(trace1['D'])), np.log10(max(trace1['D'])), 21), 
+                 kde=False, label='posterior 1') 
+    sns.distplot(trace2['D'], bins=np.logspace(np.log10(min(trace2['D'])), np.log10(max(trace2['D'])), 21), 
+                 kde=False, label='posterior 1') 
+    # sns.distplot(pm.Lognormal.dist(param['mu_D'], param['sigma_D']).random(size=len(trace)), 
+    #              bins=np.logspace(np.log(min(trace['D'])), np.log(max(trace['D'])), 51), kde=False, label='prior') 
+    # sns.distplot(trace['D'], bins=np.logspace(np.log(min(trace['D'])), np.log(max(trace['D'])), 51), kde=False, label='posterior') 
+    plt.semilogx() 
+    plt.legend() 
+    plt.xlim(1e-5, 1e3)
+    plt.title('D', fontsize=18) 
+    if not true_vals == None: plt.axvline(true_vals[0], c='r', alpha=0.8) 
+
+    try: 
+        bins_lam = np.logspace(param['mu_lambda'] - 1.*param['sigma_lambda'], param['mu_lambda'] + 5.*param['sigma_lambda'], 51)
+        # plt.subplot(212)
+        plt.subplot(312) 
+        sns.distplot(pm.Lognormal.dist(param['mu_lambda'], param['sigma_lambda']).random(size=len(trace1['lam'])), 
+                     bins=bins_lam, kde=False, label='prior') 
+        sns.distplot(trace1['lam'], bins=np.logspace(np.log10(min(trace1['lam'])), np.log10(max(trace1['lam'])), 21), 
+                     kde=False, label='posterior 1') 
+        sns.distplot(trace2['lam'], bins=np.logspace(np.log10(min(trace2['lam'])), np.log10(max(trace2['lam'])), 21), 
+                     kde=False, label='posterior 2') 
+        # sns.distplot(pm.Lognormal.dist(param['mu_lambda'], param['sigma_lambda']).random(size=len(trace)), 
+        #              bins=np.logspace(np.log(min(trace['D'])), np.log(max(trace['D'])), 51), kde=False, label='prior') 
+        # sns.distplot(trace['lam'], bins=np.logspace(np.log(min(trace['lam'])), np.log(max(trace['lam'])), 51), 
+        #              kde=False, label='posterior') 
+        plt.semilogx() 
+        plt.legend() 
+        plt.xlim(1e-15, 1e5)
+        plt.title('lambda', fontsize=18) 
+        if not true_vals == None: plt.axvline(true_vals[1], c='r', alpha=0.8) 
+    except: 
+        pass 
+
+    bins_Me = np.logspace(param['mu_Me'] - 1.*param['sigma_Me'], param['mu_Me'] + 5.*param['sigma_Me'], 51)
+    plt.subplot(313) 
+    sns.distplot(pm.Lognormal.dist(param['mu_Me'], param['sigma_Me']).random(size=len(trace2['me'])), 
+                 bins=bins_Me, kde=False, label='prior') 
+    try: 
+        sns.distplot(trace1['me'], bins=np.logspace(np.log10(min(trace1['me'])), np.log10(max(trace1['me'])), 21), 
+                 kde=False, label='posterior 1') 
+    except: 
+        pass 
+    sns.distplot(trace2['me'], bins=np.logspace(np.log10(min(trace2['me'])), np.log10(max(trace2['me'])), 21), 
+                 kde=False, label='posterior 2') 
+    # sns.distplot(pm.Lognormal.dist(param['mu_lambda'], param['sigma_lambda']).random(size=len(trace)), 
+    #              bins=np.logspace(np.log(min(trace['D'])), np.log(max(trace['D'])), 51), kde=False, label='prior') 
+    # sns.distplot(trace['lam'], bins=np.logspace(np.log(min(trace['lam'])), np.log(max(trace['lam'])), 51), 
+    #              kde=False, label='posterior') 
+    plt.semilogx() 
+    plt.legend() 
+    plt.xlim(1e-4, 1e2)
+    plt.title('Me', fontsize=18) 
+
+    plt.tight_layout() 
+    plt.show() 
+    pass 
+
+    return  
+
+def plot_prior_posterior_validation(param, trace, true_vals=None, parent=None, save=False): 
+    # plt.figure()
+    # sns.distplot(trace['D'], bins=np.logspace(-4, 2, 101), 
+    #              kde=False, label='posterior') 
+    # plt.hist(trace['D'], density=False, bins=np.logspace(-4, 2, 101), alpha=0.4) 
+    # plt.semilogx() 
+    # plt.show() 
+
+    plt.figure(1, figsize=(8,8)) 
+    
+    bins_D = np.logspace(param['mu_D'] - 3.*param['sigma_D'], param['mu_D'] + 3.*param['sigma_D'], 51)  
+
+
+    # plt.subplot(211)
+    plt.subplot(311) 
+
+    sns.distplot(pm.Lognormal.dist(param['mu_D'], param['sigma_D']).random(size=len(trace['D'])), 
+                 bins=bins_D, kde=False, label='prior') 
+    sns.distplot(trace['D'], bins=np.logspace(np.log10(min(trace['D'])), np.log10(max(trace['D'])), 21), 
+                 kde=False, label='posterior') 
+    # sns.distplot(pm.Lognormal.dist(param['mu_D'], param['sigma_D']).random(size=len(trace)), 
+    #              bins=np.logspace(np.log(min(trace['D'])), np.log(max(trace['D'])), 51), kde=False, label='prior') 
+    # sns.distplot(trace['D'], bins=np.logspace(np.log(min(trace['D'])), np.log(max(trace['D'])), 51), kde=False, label='posterior') 
+    plt.semilogx() 
+    plt.legend() 
+    plt.xlim(1e-5, 1e3)
+    plt.title('D', fontsize=18) 
+    if not true_vals == None: plt.axvline(true_vals[0], c='r', alpha=0.8) 
+
+    try: 
+        bins_lam = np.logspace(param['mu_lambda'] - 1.*param['sigma_lambda'], param['mu_lambda'] + 5.*param['sigma_lambda'], 51)
+        # plt.subplot(212)
+        plt.subplot(312) 
+        sns.distplot(pm.Lognormal.dist(param['mu_lambda'], param['sigma_lambda']).random(size=len(trace['lam'])), 
+                     bins=bins_lam, kde=False, label='prior') 
+        sns.distplot(trace['lam'], bins=np.logspace(np.log10(min(trace['lam'])), np.log10(max(trace['lam'])), 21), 
+                     kde=False, label='posterior') 
+        # sns.distplot(pm.Lognormal.dist(param['mu_lambda'], param['sigma_lambda']).random(size=len(trace)), 
+        #              bins=np.logspace(np.log(min(trace['D'])), np.log(max(trace['D'])), 51), kde=False, label='prior') 
+        # sns.distplot(trace['lam'], bins=np.logspace(np.log(min(trace['lam'])), np.log(max(trace['lam'])), 51), 
+        #              kde=False, label='posterior') 
+        plt.semilogx() 
+        plt.legend() 
+        plt.xlim(1e-15, 1e5)
+        plt.title('lambda', fontsize=18) 
+        if not true_vals == None: plt.axvline(true_vals[1], c='r', alpha=0.8) 
+    except: 
+        pass
+
+    try: 
+        bins_Me = np.logspace(param['mu_Me'] - 1.*param['sigma_Me'], param['mu_Me'] + 5.*param['sigma_Me'], 51)
+        plt.subplot(313) 
+        sns.distplot(pm.Lognormal.dist(param['mu_Me'], param['sigma_Me']).random(size=len(trace['me'])), 
+                     bins=bins_Me, kde=False, label='prior') 
+        sns.distplot(trace['me'], bins=np.logspace(np.log10(min(trace['me'])), np.log10(max(trace['me'])), 21), 
+                     kde=False, label='posterior') 
+        # sns.distplot(pm.Lognormal.dist(param['mu_lambda'], param['sigma_lambda']).random(size=len(trace)), 
+        #              bins=np.logspace(np.log(min(trace['D'])), np.log(max(trace['D'])), 51), kde=False, label='prior') 
+        # sns.distplot(trace['lam'], bins=np.logspace(np.log(min(trace['lam'])), np.log(max(trace['lam'])), 51), 
+        #              kde=False, label='posterior') 
+        plt.semilogx() 
+        plt.legend() 
+        plt.xlim(1e-4, 1e2) 
+        plt.title('Me', fontsize=18) 
+    except: 
+        pass 
+
+    plt.tight_layout() 
+    if save: plt.savefig(parent+'/_pripost.png', bbox_inches='tight') 
+    plt.show() 
+    pass 
+    
+    return  
+
+def createFolder(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory) 
+
+# funtion that construct the cov matrix for the bm-noise likelihood
+
+def diffusing_covariance(n_times, sigma0, noise, diffusivity):
+    # Build covariance matrix
+    i,j = np.meshgrid(np.arange(n_times+1), np.arange(n_times+1))
+    Sigma1 = np.minimum(i,j) * (2 * diffusivity) + sigma0**2 + noise**2 * np.eye(n_times+1)
+    
+    # Zero mean vector
+    mu1 = np.zeros(n_times+1)
+    
+    return mu1, Sigma1 
+
+def plot_diffusiveTracks(dir_, min_length, ind_array, save=False): 
+    x, y, t, track_info, lookup, track_id = loadRawMinData(dir_, min_length=min_length, isDx=False) 
+    dx, dy, dt, track_info2, lookup, track_id = loadRawMinData(dir_, min_length=min_length, isDx=True) 
+    
+    for idx, ind in enumerate(ind_array): 
+        sdx, sdy, sdt = loadSelectTraj(dx, dy, dt, track_info2, ind, True) 
+        sx, sy, st = loadSelectTraj(x, y, t, track_info, ind, False) 
+
+        plt.figure()  
+        plt.title(ind, fontsize=18) 
+        plt.plot(sx, sy, '.-') 
+        plt.xlabel('x [pix]', fontsize=14) 
+        plt.ylabel('y [pix]', fontsize=14) 
+        plt.show() 
+
+    return 
+
+
+
+def run_simpleBD_with_noise(dir_, param, min_length, ind, save=False): 
+    parent = 'results_ind_' + str(ind) 
+    createFolder(parent) 
+    
+    plot_priors(param, parent, save=save)  
+
+    x, y, t, track_info, lookup, track_id = loadRawMinData(dir_, min_length=min_length, isDx=False) 
+    dx, dy, dt, track_info2, lookup, track_id = loadRawMinData(dir_, min_length=min_length, isDx=True) 
+    sdx, sdy, sdt = loadSelectTraj(dx, dy, dt, track_info2, ind, True) 
+    sx, sy, st = loadSelectTraj(x, y, t, track_info, ind, False)
+    
+    plt.figure()  
+    plt.plot(sx, sy, '.-'); 
+    plt.xlabel('x [pix]', fontsize=14) 
+    plt.ylabel('y [pix]', fontsize=14) 
+    if save: plt.savefig(parent + '/_traj_' + str(ind) + '.png') 
+    plt.show() 
+
+    corr_y = (sy-sy.mean())
+    corr_x = (sx-sx.mean())
+    n_times = len(sx) - 1 
+
+    sigma0 = 10. 
+
+    model = pm.Model()
+
+    with model: 
+        D = pm.Lognormal('D', param['mu_D'], param['sigma_D']) 
+        me = pm.Lognormal('me', param['mu_Me'], param['sigma_Me']) 
+            
+    #     D = pm.Lognormal('D', mu=-3, sd=2) 
+    #     noise = pm.Lognormal('noise', mu=0, sd=0.5)
+        
+        mu0, sig0 = diffusing_covariance(n_times, sigma0, me, D) 
+        
+        like = pm.MvNormal('likelihood', mu=mu0, cov=sig0, observed=corr_x) + pm.MvNormal('like', mu=mu0, cov=sig0, observed=corr_y) 
+
+    with model:
+        trace = pm.sample(5000, tune=5000, chains=3, cores=1, target_accept=0.99) 
+
+    pm.traceplot(trace)  
+    if save: plt.savefig(parent + '/_trace_' + str(ind) + '.png', bbox_inches='tight') 
+
+    plot_prior_posterior_validation(param, trace, None, parent, save=save)  
+
+    np.savetxt(parent + '/_postsamp'+ str(ind) +'.tsv', np.vstack((trace['D'], trace['me'])).T, delimiter="\t") 
+
+    return 
+
+
 def generate_data(dict_): 
     init_pos, t_, D, well_pos, lambda_, Me = dict_ 
     
