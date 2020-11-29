@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy import stats
 import pymc3 as pm
-import theano.tensor as tt
+import theano.tensor as tt 
+import seaborn as sns 
 
 
 def loadMin(df, minLength, frameToSecond, pixelToMeter, file_number):
@@ -629,3 +630,77 @@ def PPCs(stat, model):
         axes[1].set_title("PP Samples autocorrX")
 
         plt.show()
+
+
+def generate_params(Jiayu_params=False): 
+
+    if not Jiayu_params: 
+        param = {} 
+        param['mu_D'] = -3. 
+        param['sigma_D'] = 2. 
+        param['mu_lambda'] = -2. 
+        param['sigma_lambda'] = 2. 
+        param['mu_Me'] = -2. 
+        param['sigma_Me'] = 2. 
+    else: 
+        param = {} 
+        param['mu_D'] = -3. 
+        param['sigma_D'] = 2. 
+        param['mu_lambda'] = -2. # Jiayu likes stronger priors on lambda  
+        param['sigma_lambda'] = 1. ## 
+        param['mu_Me'] = -2. 
+        param['sigma_Me'] = 2.  
+
+    return param 
+
+def plot_DMeAnalysis(stats):  
+    param = generate_params(Jiayu_params=False) 
+
+    [dx, dy, dt, track_info] = stats 
+    MAP_est = [] 
+    for idx, ind in enumerate(np.array([268, 180, 411, 286, 237, 632, 242, 426, 402, 374])): 
+        sdx, sdy, sdt = loadSelectTraj(dx, dy, dt, track_info, ind, True) 
+    #     sx, sy, st = utils.loadSelectTraj(x, y, t, track_info, ind, False)
+        
+        MAP_est.append(MAP_bm(sdx, sdy, sdt, 2, 1)) 
+
+    diffusive_ind = np.array([268, 180, 411, 286, 237, 632, 242, 426, 402, 374]) 
+
+    plt.figure(1, figsize=(8,6)) 
+
+    bins_D = np.logspace(param['mu_D'] - 3.*param['sigma_D'], param['mu_D'] + 3.*param['sigma_D'], 51)  
+
+
+    plt.subplot(211)
+    sns.distplot(pm.Lognormal.dist(param['mu_D'], param['sigma_D']).random(size=15000), 
+                 bins=bins_D, kde=False, label='prior') 
+    for idx, ind in enumerate(diffusive_ind): 
+        parent = 'results_ind_' + str(ind) 
+        D_trace = np.loadtxt(parent + '/_postsamp'+ str(ind) +'.tsv')[:,0] 
+        sns.distplot(D_trace, bins=np.logspace(np.log10(min(D_trace)), np.log10(max(D_trace)), 21), 
+                     kde=False)  
+        plt.axvline(MAP_est[idx], c='k', alpha=0.15) 
+    plt.axvline(MAP_est[idx], c='k', alpha=0.15, label='MAP estimate') 
+    plt.semilogx() 
+    plt.legend() 
+    plt.xlim(1e-5, 1e3)
+    plt.title(r'$D \ \ [pix^2/frame]$', fontsize=18) 
+
+    bins_Me = np.logspace(param['mu_Me'] - 1.*param['sigma_Me'], param['mu_Me'] + 5.*param['sigma_Me'], 51)
+    plt.subplot(212) 
+    sns.distplot(pm.Lognormal.dist(param['mu_Me'], param['sigma_Me']).random(size=15000), 
+                 bins=bins_Me, kde=False, label='prior') 
+    for idx, ind in enumerate(diffusive_ind): 
+        parent = 'results_ind_' + str(ind) 
+        Me_trace = np.loadtxt(parent + '/_postsamp'+ str(ind) +'.tsv')[:,1] 
+        sns.distplot(Me_trace, bins=np.logspace(np.log10(min(Me_trace)), np.log10(max(Me_trace)), 21), 
+                     kde=False)  
+    plt.semilogx() 
+    plt.legend() 
+    plt.xlim(1e-4, 1e2) 
+    plt.title(r'$M_e \ \ [pix]$', fontsize=18) 
+
+    plt.tight_layout() 
+    plt.show() 
+
+    return 
