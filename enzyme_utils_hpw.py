@@ -569,16 +569,27 @@ def PPCs(stat, model):
             np.cumsum(simulated_dy_bm, axis=1), 0, 0, axis=1
         )
 
-        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+        # ppc in autocorrX, lag=1
+        pxstd = []
+        for i in range(4000):
+            pxstd.append(calAutoCorr(simulated_x_bm[i, :], 1)[-1])
+
+        fig, axes = plt.subplots(1, 3, figsize=(16, 4))
         for i, j in zip(simulated_x_bm[::2, :], simulated_y_bm[::2, :]):
             axes[0].plot(i, j, alpha=0.2)
         axes[0].plot(sx, sy, c="k", label="True data")
         axes[1].hist(simulated_x_bm.std(axis=1), bins=30)
+        axes[2].hist(pxstd, bins=30)
+        axes[2].axvline(
+            x=autoCorrFirstX(sx, sdt), ls="--", c="r", label="data autocorrX"
+        )
         axes[1].axvline(x=sx.std(), ls="--", c="r", label="data std in x")
         axes[0].legend()
         axes[1].legend()
+        axes[2].legend()
         axes[0].set_title("PP Samples from BM model and True track")
         axes[1].set_title("PP Samples std in x")
+        axes[2].set_title("PP Samples autocorrX")
 
     if model == "me":
 
@@ -616,21 +627,66 @@ def PPCs(stat, model):
         for i in range(4000):
             pxstd.append(calAutoCorr(simulated_x_stick[i, :], 1)[-1])
 
-        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+        fig, axes = plt.subplots(1, 3, figsize=(16, 4))
         for i, j in zip(simulated_x_stick[::2, :], simulated_y_stick[::2, :]):
             axes[0].plot(i, j, alpha=0.2)
         axes[0].plot(sx, sy, c="k", label="True data")
         axes[1].hist(pxstd, bins=30)
+        axes[2].hist(simulated_x_stick.std(axis=1), bins=30)
         axes[1].axvline(
             x=autoCorrFirstX(sx, sdt), ls="--", c="r", label="data autocorrX"
         )
+        axes[2].axvline(x=sx.std(), ls="--", c="r", label="data std in x")
         axes[0].legend()
         axes[1].legend()
+        axes[2].legend()
         axes[0].set_title("PP Samples from Stuck model and True track")
         axes[1].set_title("PP Samples autocorrX")
-
+        axes[2].set_title("PP Samples std in x")
         plt.show()
 
+    if model == 'hpw':
+        model_hpw = pm.Model()
+        with model_hpw:
+            D = pm.Lognormal("D", 0, 1)
+            k = pm.Lognormal("k", 0, 1)
+
+            mean_x = (-sx[:-1]) * (1 - tt.exp(-k * sdt))
+            mean_y = (-sy[:-1]) * (1 - tt.exp(-k * sdt))
+            std = tt.sqrt(D * (1 - tt.exp(-2 * k * sdt)) / k)
+
+            like_x = pm.Normal("like_x", mu=mean_x, sd=std, observed=sdx)
+            like_y = pm.Normal("like_y", mu=mean_y, sd=std, observed=sdy)
+
+        with model_hpw:
+            trace_hpw = pm.sample(2000, tune=2000, chains=2, cores=2, progressbar=False)
+
+        simulated_x_hpw, simulated_y_hpw = np.zeros((4000, len(sx))), np.zeros((4000, len(sx)))
+        for i in range(trace_hpw['D'].shape[0]):
+            base = base_HPW_D([0, 0], [i for i in range(len(sx))], trace_hpw['D'][i], [0, 0], trace_hpw['k'][i])
+            simulated_x_hpw[i, :], simulated_y_hpw[i, :] = base[0], base[1]
+
+        pxstd = []
+        for i in range(4000):
+            pxstd.append(calAutoCorr(simulated_x_hpw[i, :], 1)[-1])
+
+        fig, axes = plt.subplots(1, 3, figsize=(16, 4))
+        for i, j in zip(simulated_x_hpw[::2, :], simulated_y_hpw[::2, :]):
+            axes[0].plot(i, j, alpha=0.2)
+        axes[0].plot(sx, sy, c="k", label="True data")
+        axes[1].hist(pxstd, bins=30)
+        axes[2].hist(simulated_x_hpw.std(axis=1), bins=30)
+        axes[1].axvline(
+            x=autoCorrFirstX(sx, sdt), ls="--", c="r", label="data autocorrX"
+        )
+        axes[2].axvline(x=sx.std(), ls="--", c="r", label="data std in x")
+        axes[0].legend()
+        axes[1].legend()
+        axes[2].legend()
+        axes[0].set_title("PP Samples from Stuck model and True track")
+        axes[1].set_title("PP Samples autocorrX")
+        axes[2].set_title("PP Samples std in x")
+        plt.show()
 
 def generate_params(Jiayu_params=False): 
 
@@ -651,7 +707,8 @@ def generate_params(Jiayu_params=False):
         param['mu_Me'] = -2. 
         param['sigma_Me'] = 2.  
 
-    return param 
+    return param
+
 
 def plot_DMeAnalysis(stats):  
     param = generate_params(Jiayu_params=False) 
