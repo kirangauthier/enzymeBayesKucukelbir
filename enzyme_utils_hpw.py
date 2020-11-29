@@ -679,8 +679,8 @@ def plot_DMeAnalysis(stats):
         D_trace = np.loadtxt(parent + '/_postsamp'+ str(ind) +'.tsv')[:,0] 
         sns.distplot(D_trace, bins=np.logspace(np.log10(min(D_trace)), np.log10(max(D_trace)), 21), 
                      kde=False)  
-        plt.axvline(MAP_est[idx], c='k', alpha=0.15) 
-    plt.axvline(MAP_est[idx], c='k', alpha=0.15, label='MAP estimate') 
+        plt.axvline(MAP_est[idx], c='k', alpha=0.35) 
+    plt.axvline(MAP_est[idx], c='k', alpha=0.35, label='MAP estimate') 
     plt.semilogx() 
     plt.legend() 
     plt.xlim(1e-5, 1e3)
