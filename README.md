@@ -1,6 +1,6 @@
 # enzymeBayes 
 
-![](final_image.png "Population level diffusion coefficient")
+![](final-project/final_image.png "Population level diffusion coefficient")
 
 Final project repository for Jiayu Zhang and Kiran Gauthier for 
 [Machine Learning with Probabilistic Programming](http://www.proditus.com/mlpp2020).
