@@ -1221,7 +1221,8 @@ def removeOutLiar(sx, sy, st):
     return sx, sy, st 
 
 def run_HPWinference(dir_, param, file_stats, save=False): 
-    root = 'enzymeBayes_results' 
+    # root = 'enzymeBayes_results'
+    root = 'enzymeBayes_results_newPriors' 
     createFolder(root) 
 
     # plot_priors(param, parent, save=save) 
@@ -1234,8 +1235,8 @@ def run_HPWinference(dir_, param, file_stats, save=False):
     new_lookup = []
 
     for i in range(len(track_info)): 
-        parent = root + '/results_track_info_idx_' + str(i) 
-        createFolder(parent)   
+        # parent = root + '/results_track_info_idx_' + str(i) 
+        # createFolder(parent)   
 
         sx, sy, st = loadSelectTraj(x, y, t, track_info, i, False)
         sx, sy, st = removeOutLiar(sx, sy, st)
@@ -1303,11 +1304,11 @@ def run_HPWinference(dir_, param, file_stats, save=False):
         trace = pm.sample(5000, tune=5000, chains=3, cores=1, target_accept=0.99) 
 
     pm.traceplot(trace)  
-    if save: plt.savefig(parent + '/_trace_' + str(ind) + '.png', bbox_inches='tight') 
+    # if save: plt.savefig(parent + '/_trace_' + str(ind) + '.png', bbox_inches='tight') 
 
     # plot_prior_posterior_validation(param, trace, None, parent, save=save)  
 
-    np.savetxt(parent + '/_postsamp'+ str(ind) +'.tsv', np.vstack((trace['D'], trace['lam'])), delimiter="\t") 
+    np.savetxt(root + '/_postsamp.tsv', np.vstack((trace['D'], trace['lam'])), delimiter="\t") 
 
     return 
 
