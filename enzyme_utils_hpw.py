@@ -964,6 +964,8 @@ def plot_finalResults(track_info, min_length):
         for idx in min_10_index:
             mu_di10.append(np.mean(np.log(postSamp[:15000, idx])))
 
+        print('LOOK AT ME', len(mu_di5), len(mu_di10))
+
         fig, ax = plt.subplots(nrows=1, ncols=2, sharey=True, figsize=(10, 4))
         mengqi_buffer = np.loadtxt("mengqi_buffer_hist.txt")
         # plt.hist(mengqi_buffer, bins=20);
@@ -996,7 +998,7 @@ def plot_finalResults(track_info, min_length):
             stats.norm.pdf(lnd, trace5["mu_d"].mean(), trace5["sig_d"].mean()),
             c="r",
             lw=3,
-            label="enzymeBayes, N = " + str(len(mu_di)),
+            label="enzymeBayes, N = " + str(len(mu_di5)),
         )
         ax[0].hist(
             mu_di5,
@@ -1037,7 +1039,7 @@ def plot_finalResults(track_info, min_length):
             ),
             c="r",
             lw=3,
-            label="enzymeBayes, N = " + str(len(mu_di)),
+            label="enzymeBayes, N = " + str(len(mu_di10)),
         )
         ax[1].hist(
             mu_di10,
