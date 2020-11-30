@@ -238,8 +238,8 @@ def inspect_prior(D_prior, k_prior, dx, x, ind, bins):
     # simulate prior
     prior = pm.Model()
     with prior:
-        D_prior_ = pm.Lognormal("Dp", D_prior[0], D_prior[1])
-        k_prior_ = pm.Lognormal("kp", k_prior[0], k_prior[1])
+        pm.Lognormal("Dp", D_prior[0], D_prior[1])
+        pm.Lognormal("kp", k_prior[0], k_prior[1])
 
     prior_samples = pm.sample_prior_predictive(samples=4000, model=prior)
 
@@ -256,8 +256,8 @@ def inspect_prior(D_prior, k_prior, dx, x, ind, bins):
         mean_y = (-(sy - sy.mean())[:-1]) * (1 - tt.exp(-k * sdt))
         std = tt.sqrt(D * (1 - tt.exp(-2 * k * sdt)) / k)
 
-        like_x = pm.Normal("like_x", mu=mean_x, sd=std, observed=sdx)
-        like_y = pm.Normal("like_y", mu=mean_y, sd=std, observed=sdy)
+        pm.Normal("like_x", mu=mean_x, sd=std, observed=sdx)
+        pm.Normal("like_y", mu=mean_y, sd=std, observed=sdy)
 
     with model:
         trace = pm.sample(2000, tune=2000, chains=2, cores=1)
@@ -519,7 +519,7 @@ def auto_x_dx(D, lam_lis, t_, repeat, n_lag):
     for i in range(len(lam_lis)):
         temp1, temp2, temp3 = [], [], []
         for j in range(repeat):
-            lambda_ = lam_lis[i]
+
             baseHPW = base_HPW_D([0, 0], t_, D, [0, 0], lam_lis[i])
             autocorr_x = calAutoCorr(np.diff(baseHPW[0]), n_lag)
             autocorr_y = calAutoCorr(np.diff(baseHPW[1]), n_lag)
@@ -548,10 +548,10 @@ def PPCs(stat, model):
 
         with bm:
             D = pm.Lognormal("D", 0, 1)
-            like_x = pm.Normal(
+            pm.Normal(
                 "like_x", mu=0, sd=tt.sqrt(2 * D * sdt), observed=sdx
             )
-            like_y = pm.Normal(
+            pm.Normal(
                 "like_y", mu=0, sd=tt.sqrt(2 * D * sdt), observed=sdy
             )
 
@@ -599,8 +599,8 @@ def PPCs(stat, model):
             me = pm.Lognormal("me", 0, 1)
             _, sig = sticking_covariance(len(sx) - 1, 0, me)
 
-            likex = pm.MvNormal("likex", mu=0, cov=sig, observed=sx)
-            likey = pm.MvNormal("likey", mu=0, cov=sig, observed=sy)
+            pm.MvNormal("likex", mu=0, cov=sig, observed=sx)
+            pm.MvNormal("likey", mu=0, cov=sig, observed=sy)
 
         with model_stick:
             trace_stick = pm.sample(2000, chains=2, cores=1, progressbar=False)
@@ -655,8 +655,8 @@ def PPCs(stat, model):
             mean_y = (-sy[:-1]) * (1 - tt.exp(-k * sdt))
             std = tt.sqrt(D * (1 - tt.exp(-2 * k * sdt)) / k)
 
-            like_x = pm.Normal("like_x", mu=mean_x, sd=std, observed=sdx)
-            like_y = pm.Normal("like_y", mu=mean_y, sd=std, observed=sdy)
+            pm.Normal("like_x", mu=mean_x, sd=std, observed=sdx)
+            pm.Normal("like_y", mu=mean_y, sd=std, observed=sdy)
 
         with model_hpw:
             trace_hpw = pm.sample(
@@ -882,7 +882,7 @@ def plot_finalResults(track_info, min_length):
         mu_d = pm.Normal("mu_d", mu=0, sd=1)
         sig_d = pm.Lognormal("sig_d", mu=0, sigma=1)
 
-        like = pm.Normal(
+        pm.Normal(
             "like",
             mu=mu_d,
             sd=tt.sqrt(sig_di ** 2 + sig_d ** 2),
@@ -1074,6 +1074,26 @@ def simulateData(me, lambda_, n_times):
     axes[1].set_title("HPW, D = 1 pixel^2/frame")
     axes[0].legend()
     axes[1].legend()
+
+    plt.show()
+    return
+
+
+def plotAutoCorr(D, t_):
+    lam_lis = np.linspace(1, 100, 15)
+    _, x_lis, error_lis = auto_x_dx(D, lam_lis, t_, 20, 1)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    for i in range(len(lam_lis)):
+        axes[0].plot(lam_lis[i] + x_lis[i], x_lis[i], '.')
+        axes[1].plot(lam_lis[i] + error_lis[i], error_lis[i], '.')
+
+    axes[0].set_title('AutocorrX vs Lambda')
+    axes[1].set_title('Map_D/D vs Lambda')
+    axes[0].set_xlabel('lambda (s^-1)')
+    axes[1].set_xlabel('lambda (s^-1)')
+    axes[0].set_ylabel('autocorr - x')
+    axes[1].set_ylabel('D_map / D')
 
     plt.show()
     return
