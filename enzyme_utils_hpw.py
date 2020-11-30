@@ -6,6 +6,7 @@ from scipy import stats
 import pymc3 as pm
 import theano.tensor as tt 
 import seaborn as sns 
+import scipy 
 
 
 def loadMin(df, minLength, frameToSecond, pixelToMeter, file_number):
@@ -262,7 +263,7 @@ def inspect_prior(D_prior, k_prior, dx, x, ind, bins):
         like_y = pm.Normal("like_y", mu=mean_y, sd=std, observed=sdy)
 
     with model:
-        trace = pm.sample(2000, tune=2000, chains=2, cores=2)
+        trace = pm.sample(2000, tune=2000, chains=2, cores=1)
 
     # plot
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
@@ -557,7 +558,7 @@ def PPCs(stat, model):
                 "like_y", mu=0, sd=tt.sqrt(2 * D * sdt), observed=sdy
             )
 
-            trace_bm = pm.sample(2000, chains=2, cores=2, progressbar=False)
+            trace_bm = pm.sample(2000, chains=2, cores=1, progressbar=False)
 
         ppc_bm = pm.sample_posterior_predictive(trace_bm, model=bm, progressbar=False)
         simulated_dx_bm = ppc_bm[bm.observed_RVs[0].name]
@@ -603,7 +604,7 @@ def PPCs(stat, model):
             likey = pm.MvNormal("likey", mu=0, cov=sig, observed=sy)
 
         with model_stick:
-            trace_stick = pm.sample(2000, chains=2, cores=2, progressbar=False)
+            trace_stick = pm.sample(2000, chains=2, cores=1, progressbar=False)
 
         # manually generate ppc samples
         simulated_x_stick, simulated_y_stick = (
@@ -659,7 +660,7 @@ def PPCs(stat, model):
             like_y = pm.Normal("like_y", mu=mean_y, sd=std, observed=sdy)
 
         with model_hpw:
-            trace_hpw = pm.sample(2000, tune=2000, chains=2, cores=2, progressbar=False)
+            trace_hpw = pm.sample(2000, tune=2000, chains=2, cores=1, progressbar=False)
 
         simulated_x_hpw, simulated_y_hpw = np.zeros((4000, len(sx))), np.zeros((4000, len(sx)))
         for i in range(trace_hpw['D'].shape[0]):
@@ -761,3 +762,165 @@ def plot_DMeAnalysis(stats):
     plt.show() 
 
     return 
+
+def plot_finalResults(track_info, min_length): 
+    root = 'enzymeBayes_results' 
+
+    postSamp = np.loadtxt(root + '/_postsamp.tsv', delimiter="\t") 
+
+    min_len = [5, 10, 25, 50, 100]
+    min_5, min_10, min_25, min_50, min_100 = [], [], [], [], []
+    min_5_ind, min_10_ind, min_25_ind, min_50_ind, min_100_ind = [], [], [], [], []
+    min_tot = [[min_5, min_5_ind], [min_10, min_10_ind],
+              [min_25, min_25_ind], [min_50, min_50_ind], [min_100, min_100_ind]]
+
+    for j, length in enumerate(track_info):
+        stored = False
+        for i in range(len(min_len)-1):
+            if length >= min_len[i] and length < min_len[i+1]:
+                #             min_tot[i][0].append(bm_logd[j])
+                min_tot[i][1].append(j)
+                stored = True
+                break
+        if stored == False:
+        #         min_tot[-1][0].append(bm_logd[j])
+           min_tot[-1][1].append(j)
+
+    min_5_index  = np.concatenate((min_5_ind, min_10_ind, min_25_ind, min_50_ind, min_100_ind)) 
+    min_10_index = np.concatenate((min_10_ind, min_25_ind, min_50_ind, min_100_ind)) 
+    min_25_index = np.concatenate((min_25_ind, min_50_ind, min_100_ind)) 
+    min_50_index = np.concatenate((min_50_ind, min_100_ind)) 
+    min_100_index = np.array(min_100_ind) 
+
+    mu_di = []; sig_di = []; 
+    if min_length == 5 or min_length == None: 
+        for idx in min_5_index: 
+            mu_di.append(np.mean(np.log(postSamp[:15000, idx]))); sig_di.append(np.std(np.log(postSamp[:15000, idx]))); 
+    elif min_length == 10: 
+        for idx in min_10_index: 
+            mu_di.append(np.mean(np.log(postSamp[:15000, idx]))); sig_di.append(np.std(np.log(postSamp[:15000, idx]))); 
+    elif min_length == 25: 
+        for idx in min_25_index: 
+            mu_di.append(np.mean(np.log(postSamp[:15000, idx]))); sig_di.append(np.std(np.log(postSamp[:15000, idx]))); 
+    elif min_length == 50: 
+        for idx in min_50_index: 
+            mu_di.append(np.mean(np.log(postSamp[:15000, idx]))); sig_di.append(np.std(np.log(postSamp[:15000, idx]))); 
+    elif min_length == 100: 
+        for idx in min_100_index: 
+            mu_di.append(np.mean(np.log(postSamp[:15000, idx]))); sig_di.append(np.std(np.log(postSamp[:15000, idx]))); 
+
+    mu_di = np.array(mu_di); sig_di = np.array(sig_di) 
+
+    model = pm.Model()
+
+    with model:
+        
+        mu_d = pm.Normal('mu_d', mu=0, sd=1)
+        sig_d = pm.Lognormal('sig_d', mu=0, sigma=1)
+        
+        like = pm.Normal('like', mu=mu_d, sd = tt.sqrt(sig_di**2 + sig_d**2), observed=mu_di)
+
+    # with model: 
+    #     trace = pm.sample(5000, tune=5000, chains=3, cores=1, target_accept=0.99, progressbar=False) 
+
+    # pm.save_trace(trace, "full_population_trace", overwrite=False) 
+    # pm.save_trace(trace, "ML10_population_trace", overwrite=False) 
+    # pm.save_trace(trace, "ML25_population_trace", overwrite=False) 
+    # pm.save_trace(trace, "ML50_population_trace", overwrite=False) 
+    
+    if min_length == 5 or min_length == None: trace = pm.load_trace("full_population_trace", model=model) 
+    if min_length == 10: trace = pm.load_trace("ML10_population_trace", model=model) 
+    # if min_length == 25: trace = pm.load_trace("ML25_population_trace", model=model) 
+    # if min_length == 50: trace = pm.load_trace("ML50_population_trace", model=model) 
+
+    if min_length == 5 or min_length == None: 
+        mengqi_buffer = np.loadtxt('mengqi_buffer_hist.txt')
+        # plt.hist(mengqi_buffer, bins=20);
+        real_d_pixel = 10**mengqi_buffer / (0.106e-6)**2 * 0.08
+        lnreal = np.log(real_d_pixel) 
+        plt.figure(figsize=(8,6)) 
+        _, bins, _ = plt.hist(lnreal, density=True, bins=np.linspace(-2, 2.5, 30), color='blue', alpha=0.6); 
+        mu, sigma = scipy.stats.norm.fit(lnreal)
+        best_fit_line = scipy.stats.norm.pdf(bins, mu, sigma)
+        plt.plot(bins, best_fit_line, c='b', lw=3, label='Mengqi data, N = '+str(len(lnreal)))  
+
+        lnd = np.linspace(-2, 2.5, 100)
+        plt.plot(lnd, stats.norm.pdf(lnd, trace['mu_d'].mean(), trace['sig_d'].mean()), c='r', lw=3, label='enzymeBayes, N = '+str(len(mu_di)))   
+        plt.hist(mu_di, density=True, bins=np.linspace(-2, 2.5, 30), color='red', alpha=0.6); 
+        plt.legend(fontsize=12)
+        plt.xlabel(r'$\ln D [\frac{pix^2}{frame}]$', fontsize=18) 
+        plt.ylabel('density', fontsize=18) 
+
+        plt.tight_layout() 
+        plt.show() 
+    
+    else: 
+        trace5 = pm.load_trace("full_population_trace", model=model) 
+        trace10 = pm.load_trace("ML10_population_trace", model=model) 
+
+        mu_di5 = []; 
+        for idx in min_5_index: 
+            mu_di5.append(np.mean(np.log(postSamp[:15000, idx]))); 
+
+        mu_di10 = []; 
+        for idx in min_10_index: 
+            mu_di10.append(np.mean(np.log(postSamp[:15000, idx]))); 
+
+        fig, ax = plt.subplots(nrows=1, ncols=2, sharey=True, figsize=(10,4)) 
+        mengqi_buffer = np.loadtxt('mengqi_buffer_hist.txt')
+        # plt.hist(mengqi_buffer, bins=20);
+        real_d_pixel = 10**mengqi_buffer / (0.106e-6)**2 * 0.08
+        lnreal = np.log(real_d_pixel) 
+        _, bins, _ = ax[0].hist(lnreal, density=True, bins=np.linspace(-2, 2.5, 30), color='blue', alpha=0.6); 
+        mu, sigma = scipy.stats.norm.fit(lnreal)
+        best_fit_line = scipy.stats.norm.pdf(bins, mu, sigma)
+        ax[0].plot(bins, best_fit_line, c='b', lw=3, label='Mengqi data, N = '+str(len(lnreal)))  
+        ax[0].set_xlabel(r'$\ln D [\frac{pix^2}{frame}]$', fontsize=18)  
+        ax[0].set_ylabel('density', fontsize=18) 
+        ax[0].legend(fontsize=12)
+
+        lnd = np.linspace(-2, 2.5, 100)
+        
+        ax[0].plot(lnd, stats.norm.pdf(lnd, trace5['mu_d'].mean(), trace5['sig_d'].mean()), c='r', lw=3, label='enzymeBayes, N = '+str(len(mu_di)))   
+        ax[0].hist(mu_di5, density=True, bins=np.linspace(-2, 2.5, 30), color='red', alpha=0.6); 
+        ax[0].legend(fontsize=12) 
+
+        real_d_pixel = 10**mengqi_buffer / (0.106e-6)**2 * 0.08
+        lnreal = np.log(real_d_pixel) 
+        _, bins, _ = ax[1].hist(lnreal, density=True, bins=np.linspace(-2, 2.5, 30), color='blue', alpha=0.6); 
+        mu, sigma = scipy.stats.norm.fit(lnreal)
+        best_fit_line = scipy.stats.norm.pdf(bins, mu, sigma)
+        ax[1].plot(bins, best_fit_line, c='b', lw=3, label='Mengqi data, N = '+str(len(lnreal)))  
+        ax[1].set_xlabel(r'$\ln D [\frac{pix^2}{frame}]$', fontsize=18)  
+        ax[1].set_ylabel('density', fontsize=18) 
+        ax[1].legend(fontsize=12)
+
+        lnd = np.linspace(-2, 2.5, 100)
+        ax[1].plot(lnd, stats.norm.pdf(lnd, trace10['mu_d'].mean(), trace10['sig_d'].mean()), c='r', lw=3, label='enzymeBayes, N = '+str(len(mu_di)))   
+        ax[1].hist(mu_di10, density=True, bins=np.linspace(-2, 2.5, 30), color='red', alpha=0.6); 
+        ax[1].legend(fontsize=12)
+
+        plt.tight_layout() 
+        plt.show() 
+
+    return 
+
+def simulateData(me, lambda_, n_times):
+   
+   t_ = [i for i in range(n_times+1)]
+
+   fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+   for i in range(len(me)):
+       x_, y_ = simulate_stuck(me[i], n_times)
+       hpw = base_HPW_D([0, 0], t_, 1, [0, 0], lambda_[i])
+       axes[0].plot(x_, y_, label='me = ' + str(me[i]) + ' pixel')
+       np.random.seed(5555)
+       axes[1].plot(hpw[0], hpw[1], label='lambda = ' + str(lambda_[i]) + ' frame^-1' , )
+
+   axes[0].set_title('Stuck Enzyme')
+   axes[1].set_title('HPW, D = 1 pixel^2/frame')
+   axes[0].legend()
+   axes[1].legend()
+   
+   plt.show() 
+   return 
